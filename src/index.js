@@ -1,23 +1,38 @@
+import SimpleLightbox from 'simplelightbox';
+import 'simplelightbox/dist/simple-lightbox.min.css';
+
+import iziToast from 'izitoast';
+import 'izitoast/dist/css/iziToast.min.css';
+
 import { fetchPhotosByQuery } from './api';
+
+// const { height: cardHeight } = document
+//   .querySelector('.gallery')
+//   .firstElementChild.getBoundingClientRect();
+
+// window.scrollBy({
+//   top: cardHeight * 2,
+//   behavior: 'smooth',
+// });
 
 const searchFormEl = document.querySelector('form#search-form');
 const galleryEl = document.querySelector('.gallery');
 const textLoader = document.querySelector('.loader');
 const textError = document.querySelector('.error');
+const loadMoreButton = document.querySelector('.load-more');
+
+var lightbox;
+
+let query = '';
+let page = 1;
+let differenceFromTotalAmount = 0;
 
 searchFormEl.addEventListener('submit', handleSubmit);
+loadMoreButton.addEventListener('click' || 'keydown', handleButtonLoadMore);
 
-async function getPhotoByQuery(query) {
+async function getPhotoByQuery(query, page) {
   try {
-    galleryEl.classList.add('hidden');
-    // containerInfo.classList.add('hidden');
-    textError.classList.add('hidden');
-    textLoader.classList.remove('hidden');
-    const result = await fetchPhotosByQuery(query);
-    if (result) {
-      galleryEl.classList.remove('hidden');
-      //   containerInfo.classList.remove('hidden');
-    }
+    const result = await fetchPhotosByQuery(query, page);
     return result;
   } catch (error) {
     console.log(error);
@@ -27,88 +42,157 @@ async function getPhotoByQuery(query) {
   }
 }
 
-function handleSubmit(evt) {
+async function handleSubmit(evt) {
   evt.preventDefault();
-  const query = evt.target[0]?.value;
-  console.log('query: ', query);
-  getPhotoByQuery(query)
+  const form = evt.target;
+  const query = form.elements.searchQuery.value;
+
+  if (query === '') {
+    iziToast.info({
+      theme: 'green',
+      position: 'topRight',
+      message: `Input field couldn't be empty. Please, enter search name.`,
+    });
+    return;
+  }
+  loadMoreButton.classList.add('hidden');
+  textError.classList.add('hidden');
+  textLoader.classList.remove('hidden');
+
+  galleryEl.innerHTML = '';
+  page = 1;
+
+  getPhotoByQuery(query, page)
     .then(photosData => {
-      //   containerInfo.innerHTML = '';
-      console.log('photosData by query: ', photosData);
+      const { hits, totalHits } = photosData;
 
-      const { hits, total, totalHits } = photosData;
+      differenceFromTotalAmount = totalHits - hits.length;
 
-      photosData.hits.map(photo => {
-        const markup = `<div class="photo-card">
-    <img src=${photo.webformatURL} alt=${photo.tags} loading="lazy" style={{
-        display: block,
-        width: 350px, 
-        hight: 'auto'}}/>
-    <div class="info">
-        <p class="info-item">
-            <b>Likes</b>
-            <p>${photo.likes}</p>
-        </p>
-            <p class="info-item">
-        <b>Views</b>
-        <p>${photo.views}</p>
-        </p>
-        <p class="info-item">
-            <b>Comments</b>
-            <p>${photo.comments}</p>
-        </p>
-        <p class="info-item">
-            <b>Downloads</b>
-            <p>${photo.downloads}</p>
-        </p>
-    </div>
-</div>`;
-        if (photo) {
-          galleryEl.classList.remove('hidden');
-        }
-        galleryEl.insertAdjacentHTML('afterend', markup);
+      if (hits.length < 1) {
+        iziToast.error({
+          theme: 'red',
+          position: 'topRight',
+          message: `Sorry, there are no images matching your search query. Please try again.`,
+        });
+        return;
+      }
+
+      if (differenceFromTotalAmount > 0) {
+        loadMoreButton.classList.remove('hidden');
+      }
+
+      iziToast.success({
+        theme: 'green',
+        position: 'topRight',
+        message: `Hooray! We found ${totalHits} images.`,
       });
 
-      //   const markup = `<div style="display: flex; flex-direction: row">
-      //     <div
-      //       style="
-      //         margin-top: 30px;
-      //         margin-right: 30px;
-      //         width: 350px;
-      //         background-color: grey;
-      //         border-radius: 4px 4px 4px 4px;
-      //         box-shadow: 0px 2px 1px 0px rgba(46, 47, 66, 0.08),
-      //           0px 1px 1px 0px rgba(46, 47, 66, 0.16),
-      //           0px 1px 6px 0px rgba(46, 47, 66, 0.08);
-      //           overflow: hidden;
-      //       "
-      //     >
-      //       <img
-      //         src=${cat[0].url}
-      //         alt=${cat[0].breeds[0].name}
-      //         style="
-      //           display: block;
-      //           width: 100%;
-      //         "
-      //       />
-      //     </div>
-      //     <div style="display: block; margin-top: 30px">
-      //       <h1 style="font-size: x-large; font-weight: 700; margin-bottom: 16px">
-      //         ${cat[0].breeds[0].name}
-      //       </h1>
-      //       <p style="margin-bottom: 12px">${cat[0].breeds[0].description}</p>
-      //       <p>
-      //         <span style="font-weight: 700; padding-right: 8px">Temperament:</span>${cat[0]?.breeds[0]?.temperament}
-      //       </p>
-      //     </div>
-      //   </div>`;
-      //   if (cat) {
-      //     containerInfo.classList.remove('hidden');
-      //   }
-      //   containerInfo.innerHTML = markup;
+      photosData.hits
+        .map(photo => {
+          const markup = createMarkup(photo);
+          galleryEl.insertAdjacentHTML('beforeend', markup);
+        })
+        .join('');
+
+      lightbox = new SimpleLightbox('.gallery a', {
+        /* options */
+        captions: true,
+        captionPosition: 'bottom',
+        captionDelay: 250,
+      });
+      searchFormEl.reset();
     })
     .catch(error => {
       console.log(error);
-      //   textError.classList.remove('hidden');
+      textError.classList.remove('hidden');
     });
+}
+
+function handleButtonLoadMore(evt) {
+  evt.preventDefault();
+  textError.classList.add('hidden');
+  textLoader.classList.remove('hidden');
+  page += 1;
+
+  getPhotoByQuery(query, page)
+    .then(photosData => {
+      const { hits } = photosData;
+
+      differenceFromTotalAmount -= hits.length;
+
+      if (differenceFromTotalAmount <= 0) {
+        iziToast.info({
+          theme: 'green',
+          position: 'topRight',
+          message: `We're sorry, but you've reached the end of search results.`,
+        });
+        loadMoreButton.classList.add('hidden');
+      }
+
+      photosData.hits
+        .map(photo => {
+          const markup = createMarkup(photo);
+          galleryEl.insertAdjacentHTML('beforeend', markup);
+        })
+        .join('');
+
+      lightbox.refresh();
+    })
+    .catch(error => {
+      console.log(error);
+      textError.classList.remove('hidden');
+    });
+}
+
+function createMarkup(photo) {
+  const {
+    largeImageURL,
+    webformatURL,
+    tags,
+    likes,
+    views,
+    comments,
+    downloads,
+  } = photo;
+  const markup = `
+      <div class="photo-card">
+        <a class="photo-link" href="${largeImageURL}">
+          <div class="photo-content-wrapper">
+            <div photo-image-wrapper>
+              <img
+                class="photo-image"
+                src="${webformatURL}"
+                alt="${tags}"
+                title="${tags}"
+                loading="lazy"
+              />
+            </div>
+            <div class="info">
+              <p class="info-item">
+                <b>Likes</b>
+                <br />
+                ${likes}
+              </p>
+              <p class="info-item">
+                <b>Views</b>
+                <br />
+                ${views}
+              </p>
+              <p class="info-item">
+                <b>Comments</b>
+                <br />
+                ${comments}
+              </p>
+              <p class="info-item">
+                <b>Downloads</b>
+                <br />
+                ${downloads}
+              </p>
+            </div>
+          </div>
+        </a>
+      </div>
+`;
+
+  return markup;
 }
