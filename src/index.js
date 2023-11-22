@@ -6,15 +6,6 @@ import 'izitoast/dist/css/iziToast.min.css';
 
 import { fetchPhotosByQuery } from './api';
 
-// const { height: cardHeight } = document
-//   .querySelector('.gallery')
-//   .firstElementChild.getBoundingClientRect();
-
-// window.scrollBy({
-//   top: cardHeight * 2,
-//   behavior: 'smooth',
-// });
-
 const searchFormEl = document.querySelector('form#search-form');
 const galleryEl = document.querySelector('.gallery');
 const textLoader = document.querySelector('.loader');
@@ -45,7 +36,7 @@ async function getPhotoByQuery(query, page) {
 async function handleSubmit(evt) {
   evt.preventDefault();
   const form = evt.target;
-  const query = form.elements.searchQuery.value;
+  query = form.elements.searchQuery.value.trim();
 
   if (query === '') {
     iziToast.info({
@@ -62,86 +53,84 @@ async function handleSubmit(evt) {
   galleryEl.innerHTML = '';
   page = 1;
 
-  getPhotoByQuery(query, page)
-    .then(photosData => {
-      const { hits, totalHits } = photosData;
+  try {
+    const photosData = await getPhotoByQuery(query, page);
 
-      differenceFromTotalAmount = totalHits - hits.length;
+    const { hits, totalHits } = photosData;
 
-      if (hits.length < 1) {
-        iziToast.error({
-          theme: 'red',
-          position: 'topRight',
-          message: `Sorry, there are no images matching your search query. Please try again.`,
-        });
-        return;
-      }
+    differenceFromTotalAmount = totalHits - hits.length;
 
-      if (differenceFromTotalAmount > 0) {
-        loadMoreButton.classList.remove('hidden');
-      }
-
-      iziToast.success({
-        theme: 'green',
+    if (hits.length < 1) {
+      iziToast.error({
+        theme: 'red',
         position: 'topRight',
-        message: `Hooray! We found ${totalHits} images.`,
+        message: `Sorry, there are no images matching your search query. Please try again.`,
       });
+      return;
+    }
 
-      photosData.hits
-        .map(photo => {
-          const markup = createMarkup(photo);
-          galleryEl.insertAdjacentHTML('beforeend', markup);
-        })
-        .join('');
+    if (differenceFromTotalAmount > 0) {
+      loadMoreButton.classList.remove('hidden');
+    }
 
-      lightbox = new SimpleLightbox('.gallery a', {
-        /* options */
-        captions: true,
-        captionPosition: 'bottom',
-        captionDelay: 250,
-      });
-      searchFormEl.reset();
-    })
-    .catch(error => {
-      console.log(error);
-      textError.classList.remove('hidden');
+    iziToast.success({
+      theme: 'green',
+      position: 'topRight',
+      message: `Hooray! We found ${totalHits} images.`,
     });
+
+    photosData.hits
+      .map(photo => {
+        const markup = createMarkup(photo);
+        galleryEl.insertAdjacentHTML('beforeend', markup);
+      })
+      .join('');
+
+    lightbox = new SimpleLightbox('.gallery a', {
+      /* options */
+      captions: true,
+      captionPosition: 'bottom',
+      captionDelay: 250,
+    });
+    searchFormEl.reset();
+  } catch (error) {
+    console.log(error);
+    textError.classList.remove('hidden');
+  }
 }
 
-function handleButtonLoadMore(evt) {
+async function handleButtonLoadMore(evt) {
   evt.preventDefault();
   textError.classList.add('hidden');
   textLoader.classList.remove('hidden');
   page += 1;
 
-  getPhotoByQuery(query, page)
-    .then(photosData => {
-      const { hits } = photosData;
+  try {
+    const photosData = await getPhotoByQuery(query, page);
+    const { hits } = photosData;
 
-      differenceFromTotalAmount -= hits.length;
+    differenceFromTotalAmount -= hits.length;
 
-      if (differenceFromTotalAmount <= 0) {
-        iziToast.info({
-          theme: 'green',
-          position: 'topRight',
-          message: `We're sorry, but you've reached the end of search results.`,
-        });
-        loadMoreButton.classList.add('hidden');
-      }
+    if (differenceFromTotalAmount <= 0) {
+      iziToast.info({
+        theme: 'green',
+        position: 'topRight',
+        message: `We're sorry, but you've reached the end of search results.`,
+      });
+      loadMoreButton.classList.add('hidden');
+    }
 
-      photosData.hits
-        .map(photo => {
-          const markup = createMarkup(photo);
-          galleryEl.insertAdjacentHTML('beforeend', markup);
-        })
-        .join('');
-
-      lightbox.refresh();
-    })
-    .catch(error => {
-      console.log(error);
-      textError.classList.remove('hidden');
-    });
+    photosData.hits
+      .map(photo => {
+        const markup = createMarkup(photo);
+        galleryEl.insertAdjacentHTML('beforeend', markup);
+      })
+      .join('');
+    lightbox.refresh();
+  } catch (error) {
+    console.log(error);
+    textError.classList.remove('hidden');
+  }
 }
 
 function createMarkup(photo) {
